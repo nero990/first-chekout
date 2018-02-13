@@ -1,0 +1,28 @@
+{
+    "name": "Nero990/first-chekout",
+    "description": "A Laravel PHP package for first-chekout.",
+    "keywords": ["php", "github", "open source", "payments", "first-chekout"],
+    "type": "library",
+    "minimum-stability": "stable",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Nero Okiewhru",
+            "email": "oghenero.okiewhru@gmail.com"
+        }
+    ],
+
+    "require": {
+        "php": ">=5.6.4",
+        "illuminate/support": "5.*",
+        "guzzlehttp/guzzle": "5.*|6.*"
+    },
+	"require-dev": {
+		"phpunit/phpunit": "5.2.*"
+    },
+	"autoload": {
+        "psr-4": {
+            "Nero360\\FirstChekout\\": "src/"
+        }
+    }
+}
