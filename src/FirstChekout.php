@@ -73,13 +73,14 @@ class FirstChekout{
      * @var string
      */
     private $testPaymentUrl = "http://upperbox1.com:8082/pay";
+//    private $testPaymentUrl = "https://sandbox.firstchekout.com/pay";
 
     /**
      * Live Payment URL as provided in FirstChekout documentation
      *
      * @var string
      */
-    private $livePaymentUrl = "http://upperbox1.com:8095/pay";
+    private $livePaymentUrl = "https://pay.firstchekout.com/pay";
 
     private $paymentUrl;
 
@@ -88,7 +89,8 @@ class FirstChekout{
      *
      * @var string
      */
-    private $bespokeBaseUri = "http://bespoke.checkout.upltest.com/api/";
+    private $bespokeBaseUri = "https://bespoke.checkout.upltest.com/api/";
+//    private $bespokeBaseUri = "https://bespoke.firstchekout.com/api/";
 
     /**
      * FirstChekout test transaction re-query URI
@@ -107,18 +109,36 @@ class FirstChekout{
     private $requeryUrl;
 
     /**
-     * FirstChekout Reversal URI
+     * FirstChekout Test Reversal URI
      *
      * @var string
      */
-    private $reversalUri = "transactions/reversal";
+    private $testReversalUri = "sandbox/transactions/reversal";
 
     /**
-     * FirstChekout Direct Debit URI
+     * FirstChekout Live Reversal URI
      *
      * @var string
      */
-    private $directDebitUri = "transactions/direct/debit";
+    private $liveReversalUri = "transactions/reversal";
+
+    private $reversalUri;
+
+    /**
+     * FirstChekout Test Direct Debit URI
+     *
+     * @var string
+     */
+    private $testDirectDebitUri = "sandbox/transactions/direct/debit";
+
+    /**
+     * FirstChekout Live Direct Debit URI
+     *
+     * @var string
+     */
+    private $liveDirectDebitUri = "transactions/direct/debit";
+
+    private $directDebitUri;
 
     /**
      * FirstChekout Settlement URI
@@ -169,6 +189,8 @@ class FirstChekout{
         $this->merchantSecret = ($this->testMode) ? $this->merchantTestSecret : $this->merchantLiveSecret;
         $this->callbackUrl = ($this->testMode) ? $this->testCallbackUrl : $this->liveCallbackUrl;
         $this->paymentUrl = ($this->testMode) ? $this->testPaymentUrl : $this->livePaymentUrl;
+        $this->reversalUri = ($this->testMode) ? $this->testReversalUri: $this->liveReversalUri;
+        $this->directDebitUri = ($this->testMode) ? $this->testDirectDebitUri : $this->liveDirectDebitUri;
 
         $this->requeryUrl = $this->bespokeBaseUri . (($this->testMode) ? $this->testRequeryUri : $this->liveRequeryUri);
     }
@@ -187,6 +209,7 @@ class FirstChekout{
         $inputs['description'] = array_get($options, 'description');
         $inputs['transaction_reference'] = array_get($options, 'transaction_reference', TransactionReference::getHashedToken(11));
         $inputs['email'] = array_get($options, 'email');
+        $inputs['tokens[]'] = array_get($options, 'tokens[]');
 
         return $inputs;
     }
@@ -238,7 +261,6 @@ class FirstChekout{
      */
     public function directDebit(array $params)
     {
-        $this->merchantMustBeLive();
 
         $this->validate(Validator::make($params, [
             'transaction_reference' => 'required',
@@ -249,9 +271,9 @@ class FirstChekout{
             'signature' => 'required'
         ]));
 
-        $this->generateHash($params['transaction_reference']);
+        $this->generateHash($params['transaction_reference'], $params['amount']);
 
-        return $this->bespokeService('POST', "{$this->directDebitUri}/{$this->hash}");
+        return $this->bespokeService('POST', "{$this->directDebitUri}/{$this->hash}", $params);
 
     }
 
@@ -263,7 +285,6 @@ class FirstChekout{
      */
     public function reversal($transaction_reference)
     {
-        $this->merchantMustBeLive();
         $this->generateHash($transaction_reference);
         return $this->bespokeService('POST', "{$this->reversalUri}/{$transaction_reference}/{$this->hash}");
     }
@@ -304,11 +325,14 @@ class FirstChekout{
      * Generates a long string using sha512 hash algorithm of a concatenation of the transaction reference, merchant's secret and merchant's code
      *
      * @param $transaction_reference
+     * @param null $amount
      * @return string
      */
-    private function generateHash($transaction_reference)
+    private function generateHash($transaction_reference, $amount = null)
     {
-        $this->hash = hash('sha512', $transaction_reference . $this->merchantSecret . $this->merchantCode);
+        $this->hash = ($amount == null) ?
+            hash('sha512', $transaction_reference . $this->merchantSecret . $this->merchantCode) :
+            hash('sha512', $transaction_reference . $amount . $this->merchantSecret . $this->merchantCode);
         return $this;
     }
 
@@ -335,7 +359,7 @@ class FirstChekout{
             ]
         ]);
 
-        $options['form_params'] = (!empty($data)) ? ['data' => $data] : [] ;
+        $options['json'] = (!empty($data)) ? ['data' => $data] : [] ;
 
         try {
             $response = $client->request($method, $uri, $options);
@@ -349,13 +373,13 @@ class FirstChekout{
                     throw new \Exception($result->message);
 
                 } catch (\Exception $exception) {
-                    throw new \Exception($exception->getMessage());
+                    throw $exception;
                 }
 
             }
 
         } catch (\Exception $exception) {
-            throw new \Exception($exception->getMessage());
+            throw $exception;
         }
         throw new \Exception("An unknown problem occurred!");
     }
